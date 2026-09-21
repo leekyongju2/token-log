@@ -36,3 +36,9 @@ CSV 열: `ended_at, user, host, session_id, project, reason, models, requests, i
 - `CLAUDE_USER` 미설정 시 `UNSET-<윈도우계정>`, `TOKEN_LOG_DIR` 미설정 시 `~/.claude/token-log`에 기록됩니다.
 - 로깅 오류가 나도 세션에는 영향이 없습니다.
 - SessionEnd 훅 기본 제한시간은 1.5초라서(Windows는 node 기동만 ~1초) `hooks.json`에 `"timeout": 30`을 지정했습니다. transcript는 스트리밍으로 읽어 크기와 무관하게 메모리 ~100MB 이하입니다.
+
+## 테스트
+```
+node test.js
+```
+중복 집계, 서브에이전트 합산, CSV 이스케이프, 동시 기록, 훅 제한시간, resume 중복을 확인합니다.
