@@ -1,0 +1,8 @@
+{
+  "name": "token-log",
+  "version": "0.1.0",
+  "description": "공유 계정용 토큰 사용량 로거: 세션 종료 시 사용자별 CSV에 한 줄씩 기록",
+  "author": { "name": "leekyongju2" },
+  "repository": "https://github.com/leekyongju2/token-log",
+  "license": "MIT"
+}
