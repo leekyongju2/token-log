@@ -64,6 +64,14 @@ const report = (user) => execFileSync(process.execPath, [REPORT, '--user', user]
   await runHook(undefined, 'x1');
   assert.ok(fs.readdirSync(logDir).some((f) => f.startsWith('UNSET-')), 'UNSET fallback file');
 
+  // Config dialog values (CLAUDE_PLUGIN_OPTION_*) win over the old env vars.
+  const optDir = path.join(tmp, 'opt-dir');
+  execFileSync(process.execPath, [HOOK], { env: { ...ENV, CLAUDE_USER: 'env이름', CLAUDE_PLUGIN_OPTION_USER_NAME: '설정이름', CLAUDE_PLUGIN_OPTION_LOG_DIR: optDir },
+    input: JSON.stringify({ session_id: 'cfg', transcript_path: transcript, cwd: 'c', reason: 'exit' }) });
+  assert.ok(fs.existsSync(path.join(optDir, '설정이름.csv')), 'plugin options used for name and folder');
+  assert.ok(report('설정이름').includes('세션 0개'), 'report ignores other folders by default');
+  assert.ok(execFileSync(process.execPath, [REPORT, '--dir', optDir], { env: ENV, encoding: 'utf8' }).includes('| 설정이름 | 1 |'), 'report --dir');
+
   // Resumed session with no new usage writes no second row (rows are deltas).
   await runHook('김철수', 'resumed');
   await runHook('김철수', 'resumed');

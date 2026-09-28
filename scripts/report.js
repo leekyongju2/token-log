@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Aggregate all <TOKEN_LOG_DIR>/*.csv into per-user and per-day tables.
-// Usage: node report.js [--since YYYY-MM-DD] [--user NAME]
+// Usage: node report.js [--dir FOLDER] [--since YYYY-MM-DD] [--user NAME]
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -9,7 +9,8 @@ const args = process.argv.slice(2);
 const opt = (k) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : undefined; };
 const since = opt('--since');
 const onlyUser = opt('--user');
-const dir = process.env.TOKEN_LOG_DIR || path.join(os.homedir(), '.claude', 'token-log');
+// --dir comes from the skill as ${user_config.log_dir}; empty when not configured.
+const dir = (opt('--dir') || '').trim() || process.env.TOKEN_LOG_DIR || path.join(os.homedir(), '.claude', 'token-log');
 
 function parseLine(line) {
   const out = []; let cur = ''; let q = false;

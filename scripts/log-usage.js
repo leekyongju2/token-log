@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Appends token usage to <TOKEN_LOG_DIR>/<CLAUDE_USER>.csv. Never fails the session: errors go to stderr.
+// Appends token usage to <log folder>/<name>.csv. Never fails the session: errors go to stderr.
 //
 //   SessionEnd:           node log-usage.js            always writes
 //   Stop (async):         node log-usage.js --interim  at most every INTERVAL, so sessions left open
@@ -16,7 +16,10 @@ const HEADER = 'ended_at,user,host,session_id,project,reason,models,requests,inp
 const HOME_DIR = path.join(os.homedir(), '.claude', 'token-log');
 const STATE_DIR = path.join(HOME_DIR, 'state');
 const RATE_DIR = path.join(HOME_DIR, 'rate');
-const INTERVAL_MS = 10 * 60 * 1000;
+// Settings come from the plugin's config dialog (/plugin configure token-log), which Claude Code
+// passes to hooks as CLAUDE_PLUGIN_OPTION_*. The older CLAUDE_USER / TOKEN_LOG_DIR env vars still work.
+const opt = (k) => (process.env[`CLAUDE_PLUGIN_OPTION_${k}`] || '').trim();
+const INTERVAL_MS = (Number(opt('INTERVAL_MIN')) || 10) * 60 * 1000;
 const PRUNE_MS = 45 * 24 * 60 * 60 * 1000;
 const FIELDS = ['requests', 'input', 'output', 'cache_write', 'cache_read', 'usd'];
 
@@ -130,8 +133,8 @@ async function logSession(input, interim, sid) {
   for (const k of FIELDS) d[k] = Math.max(0, tot[k] - (state.tot[k] || 0));
   if (d.requests === 0 && d.input + d.output + d.cache_write + d.cache_read === 0) return; // nothing new
 
-  const user = process.env.CLAUDE_USER || `UNSET-${os.userInfo().username}`;
-  const dir = process.env.TOKEN_LOG_DIR || HOME_DIR;
+  const user = opt('USER_NAME') || process.env.CLAUDE_USER || `UNSET-${os.userInfo().username}`;
+  const dir = opt('LOG_DIR') || process.env.TOKEN_LOG_DIR || HOME_DIR;
   fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, `${user.replace(/[\\/:*?"<>|]/g, '_')}.csv`);
   const row = [

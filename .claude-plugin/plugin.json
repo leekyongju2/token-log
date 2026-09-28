@@ -1,8 +1,32 @@
 {
   "name": "token-log",
-  "version": "0.3.0",
-  "description": "공유 계정용 토큰 사용량 로거: 세션 종료 시 사용자별 CSV에 한 줄씩 기록",
-  "author": { "name": "leekyongju2" },
+  "version": "0.4.0",
+  "description": "공유 계정용 토큰 사용량 로거: 사람별 CSV에 자동 기록(작업 중 10분마다 + 세션 종료 시)",
+  "author": {
+    "name": "leekyongju2"
+  },
   "repository": "https://github.com/leekyongju2/token-log",
-  "license": "MIT"
+  "license": "MIT",
+  "userConfig": {
+    "user_name": {
+      "type": "string",
+      "title": "내 이름",
+      "description": "CSV 파일 이름과 user 열에 들어갑니다. 예: 홍길동",
+      "required": true
+    },
+    "log_dir": {
+      "type": "directory",
+      "title": "기록 폴더",
+      "description": "모두가 접근하는 공유 폴더(네트워크 드라이브, OneDrive로 동기화한 SharePoint 폴더). 비우면 ~/.claude/token-log",
+      "default": ""
+    },
+    "interval_min": {
+      "type": "number",
+      "title": "중간 기록 간격(분)",
+      "description": "창을 켜 둔 채 쓰는 동안 이 간격마다 기록합니다",
+      "default": 10,
+      "min": 1,
+      "max": 1440
+    }
+  }
 }

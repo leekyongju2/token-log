@@ -6,7 +6,7 @@
     {
       "name": "token-log",
       "description": "세션 종료 시 토큰 사용량을 공유 폴더 CSV에 기록하고 /token-report로 집계",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "source": "./"
     }
   ]
