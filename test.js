@@ -6,9 +6,14 @@ const os = require('os');
 const { execFileSync, spawn } = require('child_process');
 
 const HOOK = path.join(__dirname, 'scripts', 'log-usage.js');
+const SNAP = path.join(__dirname, 'scripts', 'snapshot.js');
 const REPORT = path.join(__dirname, 'scripts', 'report.js');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'token-log-test-'));
 const logDir = path.join(tmp, 'logs');
+// Fake home so ~/.claude/token-log/{rate,bin} land in tmp, not the real profile.
+const HOME = path.join(tmp, 'home');
+const ENV = { ...process.env, TOKEN_LOG_DIR: logDir, HOME, USERPROFILE: HOME };
+const homeLog = path.join(HOME, '.claude', 'token-log');
 
 // Fixture transcript: streamed blocks repeat one message id, plus a broken line and a subagent file.
 const u = (i, o, cw, cr) => ({ input_tokens: i, output_tokens: o, cache_creation_input_tokens: cw, cache_read_input_tokens: cr });
@@ -25,7 +30,7 @@ fs.mkdirSync(path.join(tmp, 'sess', 'subagents'), { recursive: true });
 fs.writeFileSync(path.join(tmp, 'sess', 'subagents', 'agent-a.jsonl'), msg('s1', 'claude-haiku-4-5', u(5, 5, 5, 5)));
 
 const runHook = (user, sessionId) => new Promise((resolve, reject) => {
-  const env = { ...process.env, TOKEN_LOG_DIR: logDir };
+  const env = { ...ENV };
   if (user) env.CLAUDE_USER = user; else delete env.CLAUDE_USER;
   const p = spawn(process.execPath, [HOOK], { env });
   let err = '';
@@ -33,6 +38,7 @@ const runHook = (user, sessionId) => new Promise((resolve, reject) => {
   p.on('close', (code) => (code === 0 && !err ? resolve() : reject(new Error(err || `exit ${code}`))));
   p.stdin.end(JSON.stringify({ session_id: sessionId, transcript_path: transcript, cwd: 'C:\\프로젝트, "A"', reason: 'exit' }));
 });
+const report = (user) => execFileSync(process.execPath, [REPORT, '--user', user], { env: ENV, encoding: 'utf8' });
 
 (async () => {
   // Default SessionEnd timeout is 1.5s and node startup alone can take ~1s on Windows.
@@ -49,7 +55,9 @@ const runHook = (user, sessionId) => new Promise((resolve, reject) => {
   const row = lines[1];
   assert.ok(row.includes('"C:\\프로젝트, ""A"""'), 'cwd escaped');
   assert.ok(row.includes('claude-opus-5+claude-haiku-4-5'), 'models include subagent');
-  assert.ok(row.endsWith(',3,16,107,1008,10009,11140'), `totals wrong: ${row}`);
+  assert.ok(row.includes(',3,16,107,1008,10009,11140,'), `totals wrong: ${row}`);
+  assert.ok(row.endsWith(',,,,,,'), 'no statusline snapshot = empty rate columns');
+  assert.ok(fs.existsSync(path.join(homeLog, 'bin', 'snapshot.js')), 'snapshot.js copied to fixed path');
 
   // Missing CLAUDE_USER falls back to UNSET-<os user>.
   await runHook(undefined, 'x1');
@@ -58,8 +66,28 @@ const runHook = (user, sessionId) => new Promise((resolve, reject) => {
   // Resumed session logged twice counts once in the report.
   await runHook('김철수', 'resumed');
   await runHook('김철수', 'resumed');
-  const out = execFileSync(process.execPath, [REPORT, '--user', '김철수'], { env: { ...process.env, TOKEN_LOG_DIR: logDir }, encoding: 'utf8' });
+  const out = report('김철수');
   assert.ok(out.includes('| 김철수 | 1 |'), `resumed session counted twice:\n${out}`);
+
+  // Statusline snapshots: first reading kept as start, last as end; SessionEnd logs both then deletes.
+  const snap = (p5, p7, usd) => execFileSync(process.execPath, [SNAP], { env: ENV, encoding: 'utf8',
+    input: JSON.stringify({ session_id: 'r1', rate_limits: { five_hour: { used_percentage: p5, resets_at: 1790000000 }, seven_day: { used_percentage: p7 } }, cost: { total_cost_usd: usd } }) });
+  assert.strictEqual(snap(40, 10, 1.5), '5h 40% · 7d 10%', 'statusline text');
+  snap(55, 12, 2.5);
+  await runHook('박', 'r1');
+  const r1 = fs.readFileSync(path.join(logDir, '박.csv'), 'utf8').trim().split('\n')[1];
+  assert.ok(r1.endsWith(',40,55,10,12,2026-09-21T14:13:20.000Z,2.5'), `rate columns wrong: ${r1}`);
+  assert.ok(!fs.existsSync(path.join(homeLog, 'rate', 'r1.json')), 'rate file removed after logging');
+  const rep = report('박');
+  assert.ok(rep.includes('계정 한도') && rep.includes('5h 55% · 7d 12%'), `account line missing:\n${rep}`);
+  assert.ok(rep.includes('| 2.50 | 15 | 2 |'), `usd / limit rise wrong:\n${rep}`);
+
+  // CSV written by the old version gets the new header; old row stays.
+  const old = path.join(logDir, '옛.csv');
+  fs.writeFileSync(old, '\ufeffended_at,user,host,session_id,project,reason,models,requests,input,output,cache_write,cache_read,total\nold-row\n');
+  await runHook('옛', 'o1');
+  const oldLines = fs.readFileSync(old, 'utf8').split('\n');
+  assert.ok(oldLines[0].endsWith(',usd') && oldLines[1] === 'old-row' && oldLines[2].includes(',o1,'), 'header upgrade');
 
   fs.rmSync(tmp, { recursive: true, force: true });
   console.log('ok');

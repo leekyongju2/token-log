@@ -10,7 +10,22 @@
 | `scripts/log-usage.js` | 세션 transcript(서브에이전트 포함)의 usage 합산 → `<TOKEN_LOG_DIR>/<CLAUDE_USER>.csv`에 1행 추가 |
 | `scripts/report.js` · `skills/token-report` | 사용자별·일자별 집계 (`/token-report`) |
 
-CSV 열: `ended_at, user, host, session_id, project, reason, models, requests, input, output, cache_write, cache_read, total`
+CSV 열: `ended_at, user, host, session_id, project, reason, models, requests, input, output, cache_write, cache_read, total, five_hour_start, five_hour_end, seven_day_start, seven_day_end, five_hour_resets_at, usd`
+
+## 한도 % 기록 (상태줄 필요)
+계정 한도 %(5시간·7일)와 Claude Code 자체 비용 추정(`usd`)은 **상태줄 입력에만** 들어옵니다. 상태줄이 값을 `~/.claude/token-log/rate/`에 저장하면 세션 종료 훅이 시작·끝 값을 CSV에 남깁니다.
+`snapshot.js`는 첫 세션 종료 때 `~/.claude/token-log/bin/`에 복사됩니다.
+
+- 상태줄이 없으면 `settings.json`에:
+  ```json
+  "statusLine": { "type": "command", "command": "node ~/.claude/token-log/bin/snapshot.js" }
+  ```
+- 이미 상태줄 스크립트가 있으면, 입력(JSON)을 읽은 다음 줄에 한 줄 추가:
+  ```js
+  try { require(require('os').homedir() + '/.claude/token-log/bin/snapshot.js')(input); } catch {}
+  ```
+
+한도 %는 **계정 전체 값**입니다. `/token-report`의 `5h한도+%p`는 세션 동안 오른 폭이라 같은 시간에 쓴 다른 사람 몫이 섞인 추정치입니다. `usd`는 API 정가 환산이지 구독 청구액이 아닙니다. 상태줄이 안 뜨는 `claude -p` 세션은 빈칸입니다.
 
 ## 팀원 설치 (1회)
 1. Node.js 필요 (`node -v` 확인)
