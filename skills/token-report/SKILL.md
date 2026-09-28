@@ -1,6 +1,7 @@
 ---
 name: token-report
 description: 공유 계정의 토큰 사용량을 사용자별·일자별로 집계해 보여준다. "토큰 사용량", "누가 얼마나 썼어", "token report", "/token-report" 요청 시 사용.
+allowed-tools: Bash(node:*)
 ---
 
 # token-report

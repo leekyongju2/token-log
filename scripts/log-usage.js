@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Appends token usage to <log folder>/<name>.csv. Never fails the session: errors go to stderr.
 //
-//   SessionEnd:           node log-usage.js            always writes
+//   SessionEnd:           node log-usage.js            best effort (see catchUp)
+//   SessionStart (async): node log-usage.js --catchup  logs what earlier sessions used after their last row
 //   Stop (async):         node log-usage.js --interim  at most every INTERVAL, so sessions left open
 //                                                      for weeks still show up
 //
@@ -93,16 +94,34 @@ async function withLock(file, wait, fn) {
   try { await fn(); } finally { fs.rmSync(file, { force: true }); }
 }
 
-async function main(input, interim) {
+async function main(input, mode) {
   const sid = input.session_id;
-  if (!sid || /[\\/]/.test(sid)) return;
-  await withLock(path.join(STATE_DIR, `${sid}.lock`), !interim, () => logSession(input, interim, sid));
+  if (!sid || /[\/]/.test(sid)) return;
+  await withLock(path.join(STATE_DIR, `${sid}.lock`), mode === 'end', () => logSession(input, mode, sid));
 }
 
-async function logSession(input, interim, sid) {
+// SessionEnd hooks from plugins get killed after ~1.5s whatever their timeout says, and node alone
+// takes ~1s to start on Windows, so the exit row is best effort. The next session start picks up
+// whatever earlier sessions used after their last row.
+async function catchUp(currentSid) {
+  let names = [];
+  try { names = fs.readdirSync(STATE_DIR).filter((n) => n.endsWith('.json')); } catch { return; }
+  for (const n of names) {
+    const sid = n.slice(0, -5);
+    if (sid === currentSid) continue;
+    const st = readJson(path.join(STATE_DIR, n));
+    if (!st || !st.transcript) continue;
+    let mtime = 0;
+    try { mtime = fs.statSync(st.transcript).mtimeMs; } catch { continue; }
+    if (mtime <= st.at) continue; // nothing written since the last row
+    await main({ session_id: sid, transcript_path: st.transcript, cwd: st.cwd }, 'catchup');
+  }
+}
+
+async function logSession(input, mode, sid) {
   const stateFile = path.join(STATE_DIR, `${sid}.json`);
   const state = readJson(stateFile) || { at: 0, tot: {} };
-  if (interim && Date.now() - state.at < INTERVAL_MS) return;
+  if (mode === 'interim' && Date.now() - state.at < INTERVAL_MS) return;
 
   const byId = new Map();
   const t = input.transcript_path;
@@ -138,7 +157,7 @@ async function logSession(input, interim, sid) {
   fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, `${user.replace(/[\\/:*?"<>|]/g, '_')}.csv`);
   const row = [
-    new Date().toISOString(), user, os.hostname(), sid, input.cwd, interim ? 'interim' : input.reason,
+    new Date().toISOString(), user, os.hostname(), sid, input.cwd, mode === 'end' ? input.reason : mode,
     [...models].join('+'), d.requests,
     d.input, d.output, d.cache_write, d.cache_read,
     d.input + d.output + d.cache_write + d.cache_read,
@@ -151,8 +170,9 @@ async function logSession(input, interim, sid) {
   upgradeHeader(file);
   fs.appendFileSync(file, row);
 
-  // Remember what was logged. State is kept after SessionEnd so a resumed session only logs what's new.
-  writeJson(stateFile, { at: Date.now(), tot });
+  // Remember what was logged (and where the transcript is, for catch-up). Kept after SessionEnd
+  // so a resumed session only logs what's new.
+  writeJson(stateFile, { at: Date.now(), tot, transcript: input.transcript_path, cwd: input.cwd });
   if (rate.last) writeJson(rateFile, { first: rate.last, last: rate.last }); // next row starts where this one ended
 }
 
@@ -161,10 +181,10 @@ process.stdin.on('data', (c) => (raw += c));
 process.stdin.on('end', async () => {
   try {
     const input = JSON.parse(raw || '{}');
-    const interim = process.argv.includes('--interim');
+    const mode = process.argv.includes('--interim') ? 'interim' : process.argv.includes('--catchup') ? 'catchup' : 'end';
     try { installSnapshot(); } catch (e) { process.stderr.write(`[token-log] snapshot: ${e.message}\n`); }
-    await main(input, interim);
-    if (!interim) prune();
+    if (mode === 'catchup') { await catchUp(input.session_id); prune(); }
+    else await main(input, mode);
   } catch (err) {
     process.stderr.write(`[token-log] ${err.message}\n`);
   }

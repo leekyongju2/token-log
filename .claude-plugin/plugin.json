@@ -1,6 +1,6 @@
 {
   "name": "token-log",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "공유 계정용 토큰 사용량 로거: 사람별 CSV에 자동 기록(작업 중 10분마다 + 세션 종료 시)",
   "author": {
     "name": "leekyongju2"

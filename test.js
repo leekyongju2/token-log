@@ -90,6 +90,16 @@ const report = (user) => execFileSync(process.execPath, [REPORT, '--user', user]
   await runHook('최', 'live', { file: live });
   assert.ok(rowsOf('최')[1].includes(',exit,claude-opus-5,1,2,20,200,2000,2222,'), `end row is delta: ${rowsOf('최')[1]}`);
 
+  // SessionEnd got killed: the next session start logs what the old session used after its last row.
+  fs.appendFileSync(live, msg('a3', 'claude-opus-5', u(3, 30, 300, 3000)) + '\n');
+  const before = rowsOf('최').length;
+  execFileSync(process.execPath, [HOOK, '--catchup'], { env: { ...ENV, CLAUDE_USER: '최' }, input: JSON.stringify({ session_id: 'new-session' }) });
+  const cu = rowsOf('최');
+  assert.strictEqual(cu.length, before + 1, 'catch-up adds one row');
+  assert.ok(cu.at(-1).includes(',catchup,claude-opus-5,1,3,30,300,3000,3333,'), `catch-up row: ${cu.at(-1)}`);
+  execFileSync(process.execPath, [HOOK, '--catchup'], { env: { ...ENV, CLAUDE_USER: '최' }, input: JSON.stringify({ session_id: 'new-session' }) });
+  assert.strictEqual(rowsOf('최').length, before + 1, 'second catch-up adds nothing');
+
   // Stop and SessionEnd racing on the last turn: usage counted exactly once.
   const race = path.join(tmp, 'race.jsonl');
   fs.writeFileSync(race, msg('b1', 'claude-opus-5', u(1, 1, 1, 1)) + '\n');

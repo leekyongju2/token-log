@@ -84,14 +84,21 @@
       <div class="code"><pre>/plugin install token-log@token-log</pre></div>
     </li>
     <li>
-      <h3>내 이름과 기록 폴더 설정</h3>
-      <p><code>C:\Users\&lt;내계정&gt;\.claude\settings.json</code>에 추가합니다. 이미 <code>"env"</code>가 있으면 안에 두 줄만 넣으세요.</p>
-      <div class="code"><pre>"env": {
-  "CLAUDE_USER": "홍길동",
-  "TOKEN_LOG_DIR": "\\\\서버\\공유\\claude-token-log"
-}</pre></div>
-      <p class="note">기록 폴더는 모두가 접근할 수 있는 곳이면 어디든 됩니다. 네트워크 드라이브, 또는 OneDrive로 동기화한 SharePoint 폴더(예: <code>C:SERS\C:\USERS\&LT;˂�ʳ�̠�&GT;\͚�̂�˪�\͌� - ˬ�̄�\CLAUDE-TOKEN-LOGLT;˂�ʳ�̠�&GT;͚�̂�˪�͌� - ˬ�̄�AUDE-TOKEN-LOG</code>)를 쓰면 CSV가 한곳에 모이고 웹 Excel로도 열립니다.</p>
-      <p class="note">이름을 안 넣으면 <code>UNSET-윈도우계정</code>으로 기록됩니다. 폴더를 안 넣으면 내 PC의 <code>~/.claude/token-log</code>에만 쌓입니다.</p>
+      <h3>이름과 기록 폴더 입력</h3>
+      <p>설치하면 설정 창이 뜹니다. 세 칸을 채우세요. 나중에 바꿀 때는 Claude Code에서 아래 명령을 입력합니다.</p>
+      <div class="code"><pre>/plugin configure token-log</pre></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>항목</th><th>넣을 값</th></tr></thead>
+          <tbody>
+            <tr><td>내 이름</td><td>홍길동 (CSV 파일 이름이 됩니다)</td></tr>
+            <tr><td>기록 폴더</td><td>모두가 접근하는 공유 폴더</td></tr>
+            <tr><td>중간 기록 간격(분)</td><td>그대로 10</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">기록 폴더는 네트워크 드라이브(<code>\\서버\공유\claude-token-log</code>)나, OneDrive로 동기화한 SharePoint 폴더(예: <code>C:\Users\내계정\회사명\팀 - 문서\claude-token-log</code>)면 됩니다. SharePoint를 쓰면 CSV가 한곳에 모이고 웹 Excel로도 열립니다.</p>
+      <p class="note">이름을 비우면 <code>UNSET-윈도우계정</code>으로, 폴더를 비우면 내 PC의 <code>~/.claude/token-log</code>에만 쌓입니다.</p>
     </li>
     <li>
       <h3>한도 % 기록 <span class="opt">권장</span></h3>
@@ -139,8 +146,8 @@
 
   <h2>알아둘 것</h2>
   <ul class="facts">
-    <li>세션을 끝낼 때 약 1초 더 걸립니다. 답이 끝날 때의 기록은 백그라운드라 기다리지 않습니다.</li>
-    <li>터미널 창을 X로 닫으면 마지막 10분 안쪽 사용량만 빠질 수 있습니다. 공유 폴더가 끊겨 있던 동안의 기록은 다음 기록 때 합쳐서 올라갑니다.</li>
+    <li>답을 기다리는 시간은 늘지 않습니다. 기록은 백그라운드에서 합니다.</li>
+    <li>창을 X로 닫아도 괜찮습니다. 다음에 Claude Code를 열 때 빠진 양을 따라잡아 기록합니다. 공유 폴더가 끊겨 있던 동안의 사용량도 다음 기록 때 합쳐서 올라갑니다.</li>
     <li>기록되는 것: 시각, 이름, PC 이름, 프로젝트 경로, 모델, 토큰 수, 한도 %. <strong>대화 내용은 기록하지 않습니다.</strong> 프로젝트 폴더 이름은 공유 폴더 권한이 있는 사람에게 보입니다.</li>
     <li><code>claude -p</code>로 돌린 세션은 상태줄이 없어서 한도 칸이 비어 있습니다.</li>
   </ul>
