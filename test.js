@@ -29,15 +29,16 @@ fs.writeFileSync(transcript, [
 fs.mkdirSync(path.join(tmp, 'sess', 'subagents'), { recursive: true });
 fs.writeFileSync(path.join(tmp, 'sess', 'subagents', 'agent-a.jsonl'), msg('s1', 'claude-haiku-4-5', u(5, 5, 5, 5)));
 
-const runHook = (user, sessionId) => new Promise((resolve, reject) => {
+const runHook = (user, sessionId, { interim = false, file = transcript } = {}) => new Promise((resolve, reject) => {
   const env = { ...ENV };
   if (user) env.CLAUDE_USER = user; else delete env.CLAUDE_USER;
-  const p = spawn(process.execPath, [HOOK], { env });
+  const p = spawn(process.execPath, [HOOK, ...(interim ? ['--interim'] : [])], { env });
   let err = '';
   p.stderr.on('data', (d) => (err += d));
   p.on('close', (code) => (code === 0 && !err ? resolve() : reject(new Error(err || `exit ${code}`))));
-  p.stdin.end(JSON.stringify({ session_id: sessionId, transcript_path: transcript, cwd: 'C:\\프로젝트, "A"', reason: 'exit' }));
+  p.stdin.end(JSON.stringify({ session_id: sessionId, transcript_path: file, cwd: 'C:\\프로젝트, "A"', reason: 'exit' }));
 });
+const rowsOf = (user) => fs.readFileSync(path.join(logDir, `${user}.csv`), 'utf8').trim().split('\n').slice(1);
 const report = (user) => execFileSync(process.execPath, [REPORT, '--user', user], { env: ENV, encoding: 'utf8' });
 
 (async () => {
@@ -63,11 +64,31 @@ const report = (user) => execFileSync(process.execPath, [REPORT, '--user', user]
   await runHook(undefined, 'x1');
   assert.ok(fs.readdirSync(logDir).some((f) => f.startsWith('UNSET-')), 'UNSET fallback file');
 
-  // Resumed session logged twice counts once in the report.
+  // Resumed session with no new usage writes no second row (rows are deltas).
   await runHook('김철수', 'resumed');
   await runHook('김철수', 'resumed');
+  assert.strictEqual(rowsOf('김철수').length, 1, 'no-change rerun adds no row');
   const out = report('김철수');
-  assert.ok(out.includes('| 김철수 | 1 |'), `resumed session counted twice:\n${out}`);
+  assert.ok(out.includes('| 김철수 | 1 |') && out.includes('| 11,140 |'), `resumed session counted twice:\n${out}`);
+
+  // Session left open for weeks: the async Stop hook logs as it goes, throttled; SessionEnd adds only what's new.
+  const live = path.join(tmp, 'live.jsonl');
+  fs.writeFileSync(live, msg('a1', 'claude-opus-5', u(1, 10, 100, 1000)) + '\n');
+  await runHook('최', 'live', { interim: true, file: live });
+  fs.appendFileSync(live, msg('a2', 'claude-opus-5', u(2, 20, 200, 2000)) + '\n');
+  await runHook('최', 'live', { interim: true, file: live }); // within 10 min: skipped
+  assert.strictEqual(rowsOf('최').length, 1, 'interim throttled');
+  assert.ok(rowsOf('최')[0].includes(',interim,claude-opus-5,1,1,10,100,1000,1111,'), `interim row: ${rowsOf('최')[0]}`);
+  await runHook('최', 'live', { file: live });
+  assert.ok(rowsOf('최')[1].includes(',exit,claude-opus-5,1,2,20,200,2000,2222,'), `end row is delta: ${rowsOf('최')[1]}`);
+
+  // Stop and SessionEnd racing on the last turn: usage counted exactly once.
+  const race = path.join(tmp, 'race.jsonl');
+  fs.writeFileSync(race, msg('b1', 'claude-opus-5', u(1, 1, 1, 1)) + '\n');
+  await Promise.all([runHook('경주', 'race', { interim: true, file: race }), runHook('경주', 'race', { file: race })]);
+  // total column counted from the end: cwd holds a quoted comma
+  const raced = rowsOf('경주').reduce((s, r) => s + Number(r.split(',').at(-7)), 0);
+  assert.strictEqual(raced, 4, `race double-counted: ${rowsOf('경주').join(' | ')}`);
 
   // Statusline snapshots: first reading kept as start, last as end; SessionEnd logs both then deletes.
   const snap = (p5, p7, usd) => execFileSync(process.execPath, [SNAP], { env: ENV, encoding: 'utf8',
@@ -77,7 +98,8 @@ const report = (user) => execFileSync(process.execPath, [REPORT, '--user', user]
   await runHook('박', 'r1');
   const r1 = fs.readFileSync(path.join(logDir, '박.csv'), 'utf8').trim().split('\n')[1];
   assert.ok(r1.endsWith(',40,55,10,12,2026-09-21T14:13:20.000Z,2.5'), `rate columns wrong: ${r1}`);
-  assert.ok(!fs.existsSync(path.join(homeLog, 'rate', 'r1.json')), 'rate file removed after logging');
+  const rateAfter = JSON.parse(fs.readFileSync(path.join(homeLog, 'rate', 'r1.json'), 'utf8'));
+  assert.strictEqual(rateAfter.first.five_hour, 55, 'next row starts where this one ended');
   const rep = report('박');
   assert.ok(rep.includes('계정 한도') && rep.includes('5h 55% · 7d 12%'), `account line missing:\n${rep}`);
   assert.ok(rep.includes('| 2.50 | 15 | 2 |'), `usd / limit rise wrong:\n${rep}`);

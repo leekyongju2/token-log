@@ -24,8 +24,8 @@ function parseLine(line) {
 
 if (!fs.existsSync(dir)) { console.log(`로그 폴더 없음: ${dir}`); process.exit(0); }
 
-// A resumed session logs again with cumulative totals, so keep the largest row per session_id.
-const sessions = new Map();
+// Rows are deltas (usage since the previous row of that session), so they just add up.
+const all = [];
 for (const f of fs.readdirSync(dir).filter((f) => f.endsWith('.csv'))) {
   const lines = fs.readFileSync(path.join(dir, f), 'utf8').replace(/^﻿/, '').split('\n').filter(Boolean);
   const head = parseLine(lines[0]);
@@ -38,20 +38,19 @@ for (const f of fs.readdirSync(dir).filter((f) => f.endsWith('.csv'))) {
     r.d5h = rise(r.five_hour_start, r.five_hour_end);
     r.d7d = rise(r.seven_day_start, r.seven_day_end);
     r.usd = Number(r.usd) || 0;
-    const prev = sessions.get(r.session_id);
-    if (!prev || r.total > prev.total) sessions.set(r.session_id, r);
+    all.push(r);
   }
 }
 
-const rows = [...sessions.values()].filter((r) =>
+const rows = all.filter((r) =>
   (!since || r.ended_at >= since) && (!onlyUser || r.user === onlyUser));
 
 function table(title, keyFn) {
   const g = new Map();
   for (const r of rows) {
     const k = keyFn(r);
-    const a = g.get(k) || { sessions: 0, input: 0, output: 0, cache_write: 0, cache_read: 0, total: 0, usd: 0, d5h: 0, d7d: 0 };
-    a.sessions++; for (const f of ['input', 'output', 'cache_write', 'cache_read', 'total', 'usd', 'd5h', 'd7d']) a[f] += r[f];
+    const a = g.get(k) || { ids: new Set(), input: 0, output: 0, cache_write: 0, cache_read: 0, total: 0, usd: 0, d5h: 0, d7d: 0 };
+    a.ids.add(r.session_id); for (const f of ['input', 'output', 'cache_write', 'cache_read', 'total', 'usd', 'd5h', 'd7d']) a[f] += r[f];
     g.set(k, a);
   }
   const n = (x) => x.toLocaleString('en-US');
@@ -59,10 +58,10 @@ function table(title, keyFn) {
   console.log('| 구분 | 세션 | input | output | cache_write | cache_read | total | API환산$ | 5h한도+%p | 7d한도+%p |');
   console.log('|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|');
   for (const [k, a] of [...g].sort((x, y) => y[1].total - x[1].total))
-    console.log(`| ${k} | ${a.sessions} | ${n(a.input)} | ${n(a.output)} | ${n(a.cache_write)} | ${n(a.cache_read)} | ${n(a.total)} | ${a.usd.toFixed(2)} | ${a.d5h.toFixed(0)} | ${a.d7d.toFixed(0)} |`);
+    console.log(`| ${k} | ${a.ids.size} | ${n(a.input)} | ${n(a.output)} | ${n(a.cache_write)} | ${n(a.cache_read)} | ${n(a.total)} | ${a.usd.toFixed(2)} | ${a.d5h.toFixed(0)} | ${a.d7d.toFixed(0)} |`);
 }
 
-console.log(`로그 폴더: ${dir} · 세션 ${rows.length}개${since ? ` · ${since} 이후` : ''}`);
+console.log(`로그 폴더: ${dir} · 세션 ${new Set(rows.map((r) => r.session_id)).size}개${since ? ` · ${since} 이후` : ''}`);
 // Latest account-wide reading across everyone's rows.
 const lastRate = rows.filter((r) => r.five_hour_end !== '' && r.five_hour_end != null)
   .sort((a, b) => (a.ended_at < b.ended_at ? 1 : -1))[0];
