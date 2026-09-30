@@ -91,13 +91,13 @@
         <table>
           <thead><tr><th>항목</th><th>넣을 값</th></tr></thead>
           <tbody>
-            <tr><td>내 이름</td><td>홍길동 (CSV 파일 이름이 됩니다)</td></tr>
+            <tr><td>내 이름</td><td>홍길동 (기록 폴더 안에 이 이름의 폴더가 생깁니다)</td></tr>
             <tr><td>기록 폴더</td><td>모두가 접근하는 공유 폴더</td></tr>
             <tr><td>중간 기록 간격(분)</td><td>그대로 10</td></tr>
           </tbody>
         </table>
       </div>
-      <p class="note">기록 폴더는 네트워크 드라이브(<code>\\서버\공유\claude-token-log</code>)나, OneDrive로 동기화한 SharePoint 폴더(예: <code>C:\Users\내계정\회사명\팀 - 문서\claude-token-log</code>)면 됩니다. SharePoint를 쓰면 CSV가 한곳에 모이고 웹 Excel로도 열립니다.</p>
+      <p class="note">기록 폴더는 네트워크 드라이브(<code>\\서버\공유\claude-token-log</code>)나, OneDrive로 동기화한 SharePoint 폴더(예: <code>C:\Users\내계정\회사명\팀 - 문서\claude-token-log</code>)면 됩니다. SharePoint를 쓰면 모두의 기록이 한곳에 모입니다.</p>
       <p class="note">이름을 비우면 <code>UNSET-윈도우계정</code>으로, 폴더를 비우면 내 PC의 <code>~/.claude/token-log</code>에만 쌓입니다.</p>
     </li>
     <li>
@@ -109,7 +109,7 @@
     </li>
     <li>
       <h3>재시작하고 확인</h3>
-      <p>Claude Code를 다시 켜고 질문을 하나 해 보세요. 답이 끝나면 기록 폴더에 <code>내이름.csv</code>가 생깁니다.</p>
+      <p>Claude Code를 다시 켜고 질문을 하나 해 보세요. 답이 끝나면 기록 폴더에 <code>2026-09/내이름/…txt</code> 파일이 생깁니다.</p>
     </li>
   </ol>
 
@@ -138,7 +138,8 @@
 
   <h2>읽는 법</h2>
   <ul class="facts">
-    <li><strong>CSV 한 줄은 직전 줄 이후에 쓴 양</strong>입니다. 그래서 Excel에서 그냥 더하면 됩니다. 한 세션이 여러 줄로 나올 수 있고 <code>reason</code>이 <code>interim</code>이면 중간 기록입니다.</li>
+    <li><strong>기록 하나가 파일 하나</strong>입니다(JSON 한 줄). 파일을 새로 만들기만 하고 고치지 않아서 동기화 충돌이 없습니다.</li>
+    <li><strong>기록 하나는 직전 기록 이후에 쓴 양</strong>입니다. 그래서 그냥 더하면 됩니다. 한 세션이 여러 기록으로 나올 수 있고 <code>reason</code>이 <code>interim</code>이면 중간 기록입니다.</li>
     <li><strong>total은 대부분 cache_read입니다.</strong> 캐시 읽기는 단가가 가장 싸서, 부담을 보려면 <code>output</code> · <code>cache_write</code> · <code>API환산$</code>을 보세요.</li>
     <li><strong>API환산$</strong>는 Claude Code가 계산한 정가 환산액입니다. 구독 청구액이 아닙니다.</li>
     <li><strong>한도 +%p</strong>는 세션 동안 계정 전체 %가 오른 폭입니다. 같은 시간에 다른 사람이 쓴 몫이 섞이므로 추정치로 보세요.</li>

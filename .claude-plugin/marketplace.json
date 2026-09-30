@@ -1,12 +1,14 @@
 {
   "name": "token-log",
-  "owner": { "name": "leekyongju2" },
+  "owner": {
+    "name": "leekyongju2"
+  },
   "description": "공유 계정 토큰 사용량 모니터링",
   "plugins": [
     {
       "name": "token-log",
-      "description": "세션 종료 시 토큰 사용량을 공유 폴더 CSV에 기록하고 /token-report로 집계",
-      "version": "0.5.0",
+      "description": "공유 계정용 토큰 사용량 로거: 기록마다 새 파일로 공유 폴더에 자동 기록(작업 중 10분마다 + 세션 종료 시)",
+      "version": "0.6.0",
       "source": "./"
     }
   ]

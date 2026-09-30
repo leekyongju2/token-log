@@ -1,7 +1,7 @@
 {
   "name": "token-log",
-  "version": "0.5.0",
-  "description": "공유 계정용 토큰 사용량 로거: 사람별 CSV에 자동 기록(작업 중 10분마다 + 세션 종료 시)",
+  "version": "0.6.0",
+  "description": "공유 계정용 토큰 사용량 로거: 기록마다 새 파일로 공유 폴더에 자동 기록(작업 중 10분마다 + 세션 종료 시)",
   "author": {
     "name": "leekyongju2"
   },
@@ -11,7 +11,7 @@
     "user_name": {
       "type": "string",
       "title": "내 이름",
-      "description": "CSV 파일 이름과 user 열에 들어갑니다. 예: 홍길동",
+      "description": "기록 폴더 안 내 폴더 이름과 user 값이 됩니다. 예: 홍길동",
       "required": true
     },
     "log_dir": {

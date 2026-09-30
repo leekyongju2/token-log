@@ -1,7 +1,7 @@
 # token-log
 
 Claude 계정 하나를 여럿이 같이 쓰면 사용량이 한 덩어리로만 보입니다.
-token-log는 **누가, 어느 프로젝트에서, 토큰을 얼마나** 썼는지를 공유 폴더 CSV에 자동으로 기록합니다.
+token-log는 **누가, 어느 프로젝트에서, 토큰을 얼마나** 썼는지를 공유 폴더에 자동으로 기록합니다. 기록 하나가 파일 하나라 동기화 충돌이 없습니다.
 창을 몇 주씩 켜 두어도 10분마다 쌓입니다. 대화 내용은 기록하지 않습니다.
 
 **설치 안내 페이지: https://leekyongju2.github.io/token-log/**
@@ -18,7 +18,7 @@ token-log는 **누가, 어느 프로젝트에서, 토큰을 얼마나** 썼는�
 
    | 항목 | 내용 | 기본값 |
    |---|---|---|
-   | 내 이름 | CSV 파일 이름과 `user` 열 | (필수) |
+   | 내 이름 | 기록 폴더 안 내 폴더 이름과 `user` 값 | (필수) |
    | 기록 폴더 | 모두가 접근하는 공유 폴더. 네트워크 드라이브, 또는 OneDrive로 동기화한 SharePoint 폴더 | `~/.claude/token-log` |
    | 중간 기록 간격(분) | 창을 켜 둔 채 쓰는 동안의 기록 간격 | 10 |
 
@@ -35,7 +35,7 @@ token-log는 **누가, 어느 프로젝트에서, 토큰을 얼마나** 썼는�
    ```js
    try { require(require('os').homedir() + '/.claude/token-log/bin/snapshot.js')(input); } catch {}
    ```
-5. Claude Code 재시작. 질문 하나 하고 답이 끝나면 기록 폴더에 `홍길동.csv`가 생깁니다.
+5. Claude Code 재시작. 질문 하나 하고 답이 끝나면 기록 폴더에 `2026-09/홍길동/…txt`가 생깁니다.
 
 ## 사용
 
@@ -54,10 +54,15 @@ Claude Code는 플러그인의 `SessionEnd` 훅을 약 1.5초 만에 끊습니�
 Windows에서는 node 시작만 1초 가까이 걸려 종료 기록이 자주 잘립니다. 그래서 종료 기록은 보조이고,
 빠진 양은 다음 세션을 열 때 채워집니다.
 
-CSV 한 줄은 **직전 줄 이후에 쓴 양**(차이값)입니다. 그래서 그냥 더하면 합계가 됩니다.
+```
+<기록 폴더>/2026-09/홍길동/20260930T090151123Z_PC명_59f3a34d_interim.txt
+```
+파일 하나에 JSON 한 줄. 파일을 **새로 만들기만 하고 고치지 않아서** OneDrive·SharePoint 동기화 충돌이 생기지 않습니다. 같은 사람이 PC 두 대를 써도 안전합니다.
+
+기록 하나는 **직전 기록 이후에 쓴 양**(차이값)이라 그냥 더하면 합계가 됩니다.
 `reason`: `interim`(중간), `catchup`(따라잡기), 그 외는 종료 사유. `--resume`으로 이어간 세션도 새로 쓴 양만 기록됩니다.
 
-CSV 열: `ended_at, user, host, session_id, project, reason, models, requests, input, output, cache_write, cache_read, total, five_hour_start, five_hour_end, seven_day_start, seven_day_end, five_hour_resets_at, usd`
+필드: `ended_at, user, host, session_id, project, reason, models, requests, input, output, cache_write, cache_read, total, five_hour_start, five_hour_end, seven_day_start, seven_day_end, five_hour_resets_at, usd`
 
 ## 읽는 법
 
@@ -91,4 +96,4 @@ CSV 열: `ended_at, user, host, session_id, project, reason, models, requests, i
 ```
 node test.js
 ```
-중복 집계, 서브에이전트 합산, CSV 이스케이프, 동시 기록, 설정 값 우선순위, 중간 기록 간격, 따라잡기, 종료와 중간 기록의 경합, 한도 % 열, 옛 헤더 교체를 확인합니다.
+중복 집계, 서브에이전트 합산, 동시 기록, 파일을 고치지 않음, 설정 값 우선순위, 중간 기록 간격, 따라잡기, 종료와 중간 기록의 경합, 한도 % 열, 옛 헤더 교체를 확인합니다.

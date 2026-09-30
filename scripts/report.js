@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Aggregate all <TOKEN_LOG_DIR>/*.csv into per-user and per-day tables.
+// Aggregate the record files under the log folder into per-user and per-day tables.
 // Usage: node report.js [--dir FOLDER] [--since YYYY-MM-DD] [--user NAME]
 const fs = require('fs');
 const path = require('path');
@@ -12,30 +12,19 @@ const onlyUser = opt('--user');
 // --dir comes from the skill as ${user_config.log_dir}; empty when not configured.
 const dir = (opt('--dir') || '').trim() || process.env.TOKEN_LOG_DIR || path.join(os.homedir(), '.claude', 'token-log');
 
-function parseLine(line) {
-  const out = []; let cur = ''; let q = false;
-  for (let i = 0; i < line.length; i++) {
-    const c = line[i];
-    if (q) { if (c === '"' && line[i + 1] === '"') { cur += '"'; i++; } else if (c === '"') q = false; else cur += c; }
-    else if (c === '"') q = true; else if (c === ',') { out.push(cur); cur = ''; } else cur += c;
-  }
-  out.push(cur);
-  return out;
-}
-
 if (!fs.existsSync(dir)) { console.log(`로그 폴더 없음: ${dir}`); process.exit(0); }
 
-// Rows are deltas (usage since the previous row of that session), so they just add up.
+// Records are deltas (usage since the previous record of that session), so they just add up.
+// Layout: <dir>/<YYYY-MM>/<name>/*.txt, one JSON line each. Month folders before --since are skipped.
+const rise = (a, b) => (a == null || b == null || a === '' || b === '' ? 0 : Number(b) >= Number(a) ? Number(b) - Number(a) : Number(b));
 const all = [];
-for (const f of fs.readdirSync(dir).filter((f) => f.endsWith('.csv'))) {
-  const lines = fs.readFileSync(path.join(dir, f), 'utf8').replace(/^﻿/, '').split('\n').filter(Boolean);
-  const head = parseLine(lines[0]);
-  for (const l of lines.slice(1)) {
-    const cols = parseLine(l);
-    const r = Object.fromEntries(head.map((h, i) => [h, cols[i]]));
+for (const month of fs.readdirSync(dir).filter((m) => /^\d{4}-\d{2}$/.test(m) && (!since || m >= since.slice(0, 7)))) {
+  for (const f of fs.readdirSync(path.join(dir, month), { recursive: true })) {
+    if (!String(f).endsWith('.txt')) continue;
+    let r;
+    try { r = JSON.parse(fs.readFileSync(path.join(dir, month, String(f)), 'utf8')); } catch { continue; } // half-synced or foreign file
     for (const k of ['requests', 'input', 'output', 'cache_write', 'cache_read', 'total']) r[k] = Number(r[k]) || 0;
-    // Rise in account-wide % during the session. A drop means the window reset mid-session: count the end value.
-    const rise = (a, b) => (a === '' || b === '' || a == null || b == null ? 0 : Number(b) >= Number(a) ? Number(b) - Number(a) : Number(b));
+    // Rise in account-wide % during the record. A drop means the window reset in between: count the end value.
     r.d5h = rise(r.five_hour_start, r.five_hour_end);
     r.d7d = rise(r.seven_day_start, r.seven_day_end);
     r.usd = Number(r.usd) || 0;

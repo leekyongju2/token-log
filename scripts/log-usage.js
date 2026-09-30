@@ -1,19 +1,17 @@
 #!/usr/bin/env node
-// Appends token usage to <log folder>/<name>.csv. Never fails the session: errors go to stderr.
+// Writes token usage records under <log folder> (see writeRecord). Never fails the session: errors go to stderr.
 //
 //   SessionEnd:           node log-usage.js            best effort (see catchUp)
 //   SessionStart (async): node log-usage.js --catchup  logs what earlier sessions used after their last row
 //   Stop (async):         node log-usage.js --interim  at most every INTERVAL, so sessions left open
 //                                                      for weeks still show up
 //
-// Each row is the usage since the previous row of the same session (a delta), so rows can be summed.
+// Each record is the usage since the previous record of the same session (a delta), so records can be summed.
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const readline = require('readline');
 
-const HEADER = 'ended_at,user,host,session_id,project,reason,models,requests,input,output,cache_write,cache_read,total,'
-  + 'five_hour_start,five_hour_end,seven_day_start,seven_day_end,five_hour_resets_at,usd\n';
 const HOME_DIR = path.join(os.homedir(), '.claude', 'token-log');
 const STATE_DIR = path.join(HOME_DIR, 'state');
 const RATE_DIR = path.join(HOME_DIR, 'rate');
@@ -66,17 +64,20 @@ function prune() {
   }
 }
 
-// Files made before the rate columns existed: swap in the new header so old rows read as blanks.
-function upgradeHeader(file) {
-  const text = fs.readFileSync(file, 'utf8');
-  const nl = text.indexOf('\n');
-  if (text.slice(0, nl + 1).replace(/^﻿/, '') === HEADER) return;
-  fs.writeFileSync(file, '﻿' + HEADER + text.slice(nl + 1));
-}
-
-function csv(v) {
-  const s = String(v ?? '');
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+// One new file per record, never edited afterwards: OneDrive/SharePoint sync only conflicts when
+// two places change the same file, so create-only writes can't conflict.
+//   <log folder>/<YYYY-MM>/<name>/<time>_<host>_<session>_<reason>.txt   (one JSON line)
+function writeRecord(rec, now) {
+  const safe = (s) => String(s).replace(/[\\/:*?"<>|\s]/g, '_');
+  const root = opt('LOG_DIR') || process.env.TOKEN_LOG_DIR || HOME_DIR;
+  const dir = path.join(root, now.toISOString().slice(0, 7), safe(rec.user));
+  fs.mkdirSync(dir, { recursive: true });
+  const stamp = now.toISOString().replace(/[-:]/g, '').replace('.', '');
+  const base = `${stamp}_${safe(rec.host)}_${rec.session_id.slice(0, 8)}_${safe(rec.reason || 'end')}`;
+  for (let i = 0; ; i++) {
+    try { return fs.writeFileSync(path.join(dir, `${base}${i ? '_' + i : ''}.txt`), JSON.stringify(rec) + '\n', { flag: 'wx' }); }
+    catch (e) { if (e.code !== 'EEXIST' || i > 20) throw e; }
+  }
 }
 
 // One writer per session: the async Stop run and SessionEnd can overlap on the last turn.
@@ -153,22 +154,18 @@ async function logSession(input, mode, sid) {
   if (d.requests === 0 && d.input + d.output + d.cache_write + d.cache_read === 0) return; // nothing new
 
   const user = opt('USER_NAME') || process.env.CLAUDE_USER || `UNSET-${os.userInfo().username}`;
-  const dir = opt('LOG_DIR') || process.env.TOKEN_LOG_DIR || HOME_DIR;
-  fs.mkdirSync(dir, { recursive: true });
-  const file = path.join(dir, `${user.replace(/[\\/:*?"<>|]/g, '_')}.csv`);
-  const row = [
-    new Date().toISOString(), user, os.hostname(), sid, input.cwd, mode === 'end' ? input.reason : mode,
-    [...models].join('+'), d.requests,
-    d.input, d.output, d.cache_write, d.cache_read,
-    d.input + d.output + d.cache_write + d.cache_read,
-    first.five_hour, last.five_hour, first.seven_day, last.seven_day, last.five_hour_resets_at,
-    last.usd == null ? '' : Math.round(d.usd * 1e4) / 1e4,
-  ].map(csv).join(',') + '\n';
-
-  // 'wx' = create only: a concurrent first write can't truncate another session's row. BOM for Excel.
-  try { fs.writeFileSync(file, '﻿' + HEADER, { flag: 'wx' }); } catch (e) { if (e.code !== 'EEXIST') throw e; }
-  upgradeHeader(file);
-  fs.appendFileSync(file, row);
+  const now = new Date();
+  const rec = {
+    ended_at: now.toISOString(), user, host: os.hostname(), session_id: sid, project: input.cwd,
+    reason: mode === 'end' ? input.reason : mode, models: [...models].join('+'), requests: d.requests,
+    input: d.input, output: d.output, cache_write: d.cache_write, cache_read: d.cache_read,
+    total: d.input + d.output + d.cache_write + d.cache_read,
+    five_hour_start: first.five_hour ?? null, five_hour_end: last.five_hour ?? null,
+    seven_day_start: first.seven_day ?? null, seven_day_end: last.seven_day ?? null,
+    five_hour_resets_at: last.five_hour_resets_at ?? null,
+    usd: last.usd == null ? null : Math.round(d.usd * 1e4) / 1e4,
+  };
+  writeRecord(rec, now);
 
   // Remember what was logged (and where the transcript is, for catch-up). Kept after SessionEnd
   // so a resumed session only logs what's new.
